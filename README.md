@@ -1,5 +1,5 @@
 <p align="center">
-  <h1 align="center">logseq-cli</h1>
+  <h1 align="center">Logseq CLI</h1>
 </p>
 
 <p align="center">
