@@ -1,5 +1,16 @@
 <p align="center">
-  <h1 align="center">Logseq CLI</h1>
+  <pre>
+██╗      ██████╗  ██████╗ ███████╗███████╗ ██████╗       ██████╗██╗     ██╗
+██║     ██╔═══██╗██╔════╝ ██╔════╝██╔════╝██╔═══██╗     ██╔════╝██║     ██║
+██║     ██║   ██║██║  ███╗███████╗█████╗  ██║   ██║     ██║     ██║     ██║
+██║     ██║   ██║██║   ██║╚════██║██╔══╝  ██║▄▄ ██║     ██║     ██║     ██║
+███████╗╚██████╔╝╚██████╔╝███████║███████╗╚██████╔╝     ╚██████╗███████╗██║
+╚══════╝ ╚═════╝  ╚═════╝ ╚══════╝╚══════╝ ╚══▀▀═╝      -╚═════╝╚══════╝╚═╝
+  </pre>
+</p>
+
+<p align="center">
+  <strong>Logseq CLI</strong>
 </p>
 
 <p align="center">
@@ -15,6 +26,10 @@
 
 <p align="center">
 A Unix-composable CLI for the <a href="https://logseq.com">Logseq</a> local HTTP API — built for humans and AI agents alike. NDJSON output, clean stderr, and auto-stdin composition let you wire Logseq into any shell pipeline or agentic workflow without glue code.
+</p>
+
+<p align="center">
+  <img src="./assets/help.png" alt="PowerShell screenshot showing the logseq CLI help output" width="900">
 </p>
 
 ---
