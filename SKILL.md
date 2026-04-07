@@ -34,10 +34,17 @@ Guidelines:
 
 ## Workflow
 
-1. Confirm the CLI surface with `logseq --help`, then inspect the relevant subcommand help such as `logseq page --help`, `logseq block --help`, or `logseq query --help`.
-2. Prefer pipeline-style CLI usage when the downstream command explicitly supports piped input for the field it needs.
-3. Prefer the CLI for page lookup, block operations, graph queries, and other supported mutations.
-4. Fall back to direct file edits only when the CLI cannot perform the task or when the task is explicitly about raw Markdown files.
+1. First check whether the `logseq` command exists by running `logseq --help`.
+2. If the command is missing or not found, stop and tell the user explicitly that this skill depends on the separately installed `logseq` CLI and that the skill itself does not bundle the executable.
+3. When the CLI is missing, give concrete recovery steps:
+   - Windows PowerShell: `py -m pip install --user .` from the `logseq-cli` repo, or `pipx install .` if the user prefers `pipx`.
+   - If install succeeds but `logseq` is still not found on Windows, tell the user to add their user Python Scripts directory to `PATH`, for example `%APPDATA%\Python\Python310\Scripts`.
+   - macOS / Linux: `python3 -m pip install --user .`, then add `~/.local/bin` to `PATH` if needed.
+   - If the repo is already present locally but not installed, tell the user the skill only provides instructions and does not run the repo as an adjacent bundled tool automatically.
+4. After `logseq --help` works, inspect the relevant subcommand help such as `logseq page --help`, `logseq block --help`, or `logseq query --help`.
+5. Prefer pipeline-style CLI usage when the downstream command explicitly supports piped input for the field it needs.
+6. Prefer the CLI for page lookup, block operations, graph queries, and other supported mutations.
+7. Fall back to direct file edits only when the CLI cannot perform the task or when the task is explicitly about raw Markdown files.
 
 ## Page References
 
@@ -81,5 +88,7 @@ logseq page --help
 logseq block --help
 logseq query --help
 ```
+
+If `logseq --help` fails because the command is missing, say so plainly and include the install and `PATH` steps from the workflow above before attempting any Logseq CLI operations.
 
 Use the least invasive command that answers the question. If the user asks about a page and the CLI can retrieve it, use that route before opening `pages/*.md` directly. When possible, build a short `logseq ... | logseq ...` pipeline first.
