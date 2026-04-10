@@ -215,6 +215,112 @@ Related commands:
 - `logseq skill show`
 - `logseq skill uninstall`
 
+## Uninstall
+
+Use the uninstall flow that matches how you originally installed `logseq-cli`.
+
+### Uninstall a global `pipx` install from PyPI
+
+#### Windows (PowerShell)
+
+```powershell
+pipx uninstall logseq-cli
+```
+
+#### macOS / Linux
+
+```bash
+pipx uninstall logseq-cli
+```
+
+### Uninstall a global `pip` install from PyPI
+
+#### Windows (PowerShell)
+
+```powershell
+py -m pip uninstall logseq-cli
+```
+
+#### macOS
+
+```bash
+python3 -m pip uninstall logseq-cli
+```
+
+#### Linux
+
+```bash
+python3 -m pip uninstall logseq-cli
+```
+
+If you installed with `--user`, this removes the package and its `logseq` entry point from your user Python location.
+
+### Uninstall a local checkout installed with `pipx`
+
+If you ran `pipx install .` from this repository, remove that environment by package name:
+
+#### Windows (PowerShell)
+
+```powershell
+pipx uninstall logseq-cli
+```
+
+#### macOS / Linux
+
+```bash
+pipx uninstall logseq-cli
+```
+
+### Uninstall a virtual environment install
+
+If you created a project-local virtual environment, deactivate it if it is active and then remove the virtual environment directory.
+
+#### Windows (PowerShell)
+
+```powershell
+deactivate
+Remove-Item -Recurse -Force .\.venv
+```
+
+#### macOS / Linux
+
+```bash
+deactivate
+rm -rf .venv
+```
+
+If the environment is not active, skip `deactivate` and just remove `.venv`.
+
+### Uninstall a user install from a local checkout
+
+#### Windows (PowerShell)
+
+```powershell
+py -m pip uninstall logseq-cli
+```
+
+#### macOS
+
+```bash
+python3 -m pip uninstall logseq-cli
+```
+
+#### Linux
+
+```bash
+python3 -m pip uninstall logseq-cli
+```
+
+### Uninstall the agent skill
+
+If you also installed the optional agent skill, remove it separately:
+
+```bash
+logseq skill uninstall
+```
+
+That removes the installed `SKILL.md` from the supported skill target directories.
+
 ---
 
 ## Configuration
