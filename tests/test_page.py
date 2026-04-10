@@ -46,11 +46,11 @@ def test_page_list_fields_option(runner, mock_service):
 
 def test_page_list_plain_option(runner, mock_service):
     mock_service.get_all_pages_raw.return_value = [
-        {"originalName": "Page A", "uuid": "1", "journal?": False, "properties": {}},
+        {"originalName": "שלום", "uuid": "1", "journal?": False, "properties": {}},
     ]
     result = runner.invoke(app, ["page", "list", "--plain"])
     assert result.exit_code == 0
-    assert "Page A" in result.stdout
+    assert "שלום" in result.stdout
     assert result.stdout.strip()[0] != "{"  # Not JSON
 
 

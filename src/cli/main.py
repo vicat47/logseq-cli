@@ -21,6 +21,20 @@ from src.cli import skill as skill_module
 
 load_dotenv()
 
+
+def configure_windows_stdio_utf8() -> None:
+    if os.name != "nt":
+        return
+
+    for stream_name in ("stdout", "stderr"):
+        stream = getattr(sys, stream_name, None)
+        reconfigure = getattr(stream, "reconfigure", None)
+        if callable(reconfigure):
+            reconfigure(encoding="utf-8")
+
+
+configure_windows_stdio_utf8()
+
 app = typer.Typer(no_args_is_help=True)
 app.add_typer(auth_module.app, name="auth")
 app.add_typer(page_module.app, name="page")
