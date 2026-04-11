@@ -196,6 +196,17 @@ def test_block_insert_batch_invalid_json_exits_1(runner, mock_service):
     assert result.exit_code == 1
 
 
+def test_block_insert_batch_plain_handles_string_results(runner, mock_service):
+    mock_service.insert_batch_block.return_value = ["b1", "b2"]
+    batch = '[{"content": "Block 1"}, {"content": "Block 2"}]'
+    result = runner.invoke(
+        app,
+        ["block", "insert-batch", "parent-uuid", batch, "--plain"],
+    )
+    assert result.exit_code == 0
+    assert result.stdout == "b1\n\nb2\n"
+
+
 # --- help text coverage ---
 
 def test_block_get_has_help(runner):

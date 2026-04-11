@@ -46,3 +46,15 @@ def test_plain_produces_human_readable_table():
         assert False, "Expected non-JSON plain output"
     except (json.JSONDecodeError, ValueError):
         pass
+
+
+def test_plain_list_of_strings_prints_one_value_per_block():
+    result = format_output(["b1", "b2"], plain=True)
+    assert result == "b1\n\nb2\n"
+
+
+def test_plain_nested_values_are_json_encoded():
+    data = {"children": [{"uuid": "c1"}], "created": True}
+    result = format_output(data, plain=True)
+    assert 'children: [{"uuid": "c1"}]' in result
+    assert "created: True" in result
