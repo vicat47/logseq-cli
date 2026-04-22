@@ -262,6 +262,7 @@ def test_auth_set_server_prompts_on_connection_failure_and_saves_on_y(monkeypatc
     result = CliRunner().invoke(app, ["auth", "set-server", "127.0.0.1:12315"], input="y\n")
     assert result.exit_code == 0
     assert "Stored Logseq server: 127.0.0.1:12315" in result.stdout
+    assert "Connection: not verified" in result.stdout
     import json
     config = json.loads((tmp_path / "config.json").read_text(encoding="utf-8"))
     assert config["server"] == "127.0.0.1:12315"
@@ -279,6 +280,7 @@ def test_auth_set_server_saves_immediately_when_connected(monkeypatch, tmp_path)
 
     assert result.exit_code == 0
     assert "Stored Logseq server: http://127.0.0.1:12315" in result.stdout
+    assert "Connection: OK" in result.stdout
     assert "Save this server address anyway" not in result.output
     import json
     config = json.loads((tmp_path / "config.json").read_text(encoding="utf-8"))

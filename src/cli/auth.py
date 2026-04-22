@@ -62,7 +62,8 @@ def auth_set_server(
     host, port = _parse_server(server)
 
     # Pre-save connectivity check
-    if not _check_connectivity(host, port):
+    connected = _check_connectivity(host, port)
+    if not connected:
         typer.echo(
             f"Warning: Cannot connect to Logseq at {host}:{port}. "
             f"Is Logseq running and reachable?",
@@ -75,6 +76,10 @@ def auth_set_server(
     path = set_server(server)
     typer.echo(f"Stored Logseq server: {server}")
     typer.echo(f"Config path: {path}")
+    if connected:
+        typer.echo("Connection: OK")
+    else:
+        typer.echo("Connection: not verified (Logseq not reachable at time of saving)")
 
 
 @app.command("status")
