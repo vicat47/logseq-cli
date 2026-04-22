@@ -11,7 +11,9 @@ app = typer.Typer(no_args_is_help=True, help="Manage Logseq API connection setti
 
 
 def _validate_server(value: str) -> str:
-    """Validate server string (host:port format)."""
+    """Validate server URL string."""
+    if not value or not value.strip():
+        raise typer.BadParameter("Server address cannot be empty.")
     try:
         _parse_server(value)
     except ValueError as e:
@@ -54,7 +56,7 @@ def auth_set_token(
 def auth_set_server(
     server: Annotated[
         str,
-        typer.Argument(help="Logseq HTTP server address in 'host' or 'host:port' format (default: 127.0.0.1:12315). Port is optional, omitted uses 12315.", callback=_validate_server),
+        typer.Argument(help="Logseq HTTP server URL (default: http://127.0.0.1:12315). Examples: http://10.0.0.1:12315, https://example.com", callback=_validate_server),
     ],
 ) -> None:
     host, port = _parse_server(server)
