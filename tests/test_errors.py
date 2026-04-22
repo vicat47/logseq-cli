@@ -149,7 +149,7 @@ def test_get_current_graph_returns_graph_info(monkeypatch, tmp_path):
     class FakeResponse:
         status_code = 200
         def json(self):
-            return {"name": "工作活动", "path": "D:/Document/Sync/SynologyDrive/AppData/logseq/工作活动", "url": "logseq_local_D:/Document/Sync/SynologyDrive/AppData/logseq/工作活动"}
+            return {"name": "Test Graph", "path": "/home/user/logseq/test-graph", "url": "logseq_local_/home/user/logseq/test-graph"}
         def raise_for_status(self):
             pass
 
@@ -168,8 +168,8 @@ def test_get_current_graph_returns_graph_info(monkeypatch, tmp_path):
         result = _get_current_graph("127.0.0.1", 12315, "fake-token")
 
     assert result is not None
-    assert result["name"] == "工作活动"
-    assert "工作活动" in result["path"]
+    assert result["name"] == "Test Graph"
+    assert "test-graph" in result["path"]
 
 
 def test_get_current_graph_returns_none_on_error(monkeypatch, tmp_path):

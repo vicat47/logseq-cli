@@ -12,7 +12,8 @@ app = typer.Typer(no_args_is_help=True, help="Manage Logseq API connection setti
 
 def _validate_server(value: str) -> str:
     """Validate server URL string."""
-    if not value or not value.strip():
+    value = value.strip()
+    if not value:
         raise typer.BadParameter("Server address cannot be empty.")
     try:
         _parse_server(value)
@@ -67,7 +68,7 @@ def auth_set_token(
         typer.Argument(help="Logseq API token. If omitted, you will be prompted securely."),
     ] = None,
 ) -> None:
-    value = token or typer.prompt("Logseq API token", hide_input=True)
+    value = (token or typer.prompt("Logseq API token", hide_input=True)).strip()
     path = set_token(value)
     typer.echo("Stored Logseq API token")
     typer.echo(f"Config path: {path}")

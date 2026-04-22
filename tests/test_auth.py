@@ -401,3 +401,38 @@ def test_auth_set_server_shows_graph_info_warning_when_unavailable(monkeypatch, 
     assert "Stored Logseq server: http://127.0.0.1:12315" in result.stdout
     assert "Connection: OK" in result.stdout
     assert "Could not retrieve current graph info" in result.stdout
+
+
+# ---- trim tests ----
+
+def test_auth_set_server_trims_whitespace(monkeypatch, tmp_path):
+    """Leading/trailing whitespace should be trimmed from server address."""
+    monkeypatch.setenv("LOGSEQ_CLI_CONFIG_DIR", str(tmp_path))
+    from src.cli.main import app
+    from unittest.mock import patch
+    with patch("src.cli.auth._check_connectivity", return_value=True):
+        result = runner().invoke(app, ["auth", "set-server", "  http://example.com:8080  "])
+    assert result.exit_code == 0
+    assert "Stored Logseq server: http://example.com:8080" in result.stdout
+    config = json.loads((tmp_path / "config.json").read_text(encoding="utf-8"))
+    assert config["server"] == "http://example.com:8080"
+
+
+def test_auth_set_server_rejects_whitespace_only(monkeypatch, tmp_path):
+    """Whitespace-only input should be rejected as empty."""
+    monkeypatch.setenv("LOGSEQ_CLI_CONFIG_DIR", str(tmp_path))
+    from src.cli.main import app
+    result = runner().invoke(app, ["auth", "set-server", "   "])
+    assert result.exit_code == 2
+    assert "cannot be empty" in result.output
+
+
+def test_auth_set_token_trims_whitespace(monkeypatch, tmp_path):
+    """Leading/trailing whitespace should be trimmed from token."""
+    monkeypatch.setenv("LOGSEQ_CLI_CONFIG_DIR", str(tmp_path))
+    from src.cli.main import app
+    result = runner().invoke(app, ["auth", "set-token", "  my-token  "])
+    assert result.exit_code == 0
+    config = json.loads((tmp_path / "config.json").read_text(encoding="utf-8"))
+    assert config["token"] == "my-token"
+
