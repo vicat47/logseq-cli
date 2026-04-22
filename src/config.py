@@ -7,13 +7,42 @@ import re
 from pathlib import Path
 from typing import Any
 
+DEFAULT_SERVER = "127.0.0.1:12315"
 
-def _validate_host_value(host: str) -> None:
-    """Validate host at the config layer. Raises ValueError for invalid hosts."""
-    if not host or not host.strip():
-        raise ValueError("Host cannot be empty.")
+
+def _parse_server(server: str) -> tuple[str, int]:
+    """Parse 'host:port' string into (host, port). Raises ValueError on invalid input."""
+    if not server or not server.strip():
+        raise ValueError("Server cannot be empty. Expected format: 'host:port'")
+
+    # Split on last colon to support IPv6 like [::1]:12315
+    if ":" not in server:
+        raise ValueError(f"Invalid server '{server}': expected format 'host:port'")
+
+    last_colon = server.rfind(":")
+    host = server[:last_colon].strip()
+    port_str = server[last_colon + 1:].strip()
+
+    if not host:
+        raise ValueError(f"Invalid server '{server}': host cannot be empty")
     if re.search(r"[\s\x00-\x1f]", host):
-        raise ValueError(f"Invalid host '{host}': must not contain spaces or control characters.")
+        raise ValueError(f"Invalid host '{host}': must not contain spaces or control characters")
+    if not port_str:
+        raise ValueError(f"Invalid server '{server}': port cannot be empty")
+
+    try:
+        port = int(port_str)
+    except ValueError:
+        raise ValueError(f"Invalid server '{server}': port '{port_str}' is not a valid integer")
+    if port < 1 or port > 65535:
+        raise ValueError(f"Invalid server '{server}': port must be between 1 and 65535, got {port}")
+
+    return host, port
+
+
+def _validate_server(server: str) -> None:
+    """Validate server string at the config layer. Raises ValueError on invalid input."""
+    _parse_server(server)  # Will raise ValueError if invalid
 
 
 def get_config_dir() -> Path:
@@ -74,30 +103,43 @@ def get_token() -> str | None:
     return token if isinstance(token, str) and token else None
 
 
-def set_host(host: str) -> Path:
-    _validate_host_value(host)
+def set_server(server: str) -> Path:
+    _validate_server(server)
     config = load_config()
-    config["host"] = host
+    config["server"] = server
+    # Clean up legacy host/port keys
+    config.pop("host", None)
+    config.pop("port", None)
     return save_config(config)
 
 
-def get_host() -> str:
+def get_server() -> str:
     config = load_config()
+
+    # Prefer new 'server' key
+    server = config.get("server")
+    if isinstance(server, str) and server:
+        return server
+
+    # Backward compatibility: reconstruct from legacy host + port
     host = config.get("host")
-    return host if isinstance(host, str) and host else "127.0.0.1"
-
-
-def set_port(port: int) -> Path:
-    if not isinstance(port, int) or port < 1 or port > 65535:
-        raise ValueError(f"Port must be between 1 and 65535, got {port}")
-    config = load_config()
-    config["port"] = port
-    return save_config(config)
-
-
-def get_port() -> int:
-    config = load_config()
     port = config.get("port")
-    if isinstance(port, int) and 1 <= port <= 65535:
-        return port
-    return 12315
+    if isinstance(host, str) and host and isinstance(port, int) and 1 <= port <= 65535:
+        return f"{host}:{port}"
+
+    return DEFAULT_SERVER
+
+
+def resolve_server() -> tuple[str, int]:
+    """Resolve the current server into (host, port) tuple, applying env var override."""
+    env_server = os.environ.get("LOGSEQ_SERVER")
+    server_str = env_server if env_server else get_server()
+
+    # Validate env var server
+    if env_server:
+        try:
+            return _parse_server(env_server)
+        except ValueError as e:
+            raise ValueError(f"Invalid LOGSEQ_SERVER '{env_server}': {e}")
+
+    return _parse_server(server_str)

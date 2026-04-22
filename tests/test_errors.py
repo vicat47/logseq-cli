@@ -13,7 +13,6 @@ def runner():
 
 def test_missing_token_exits_1_with_clear_message(runner):
     with patch.dict("os.environ", {"LOGSEQ_CLI_CONFIG_DIR": "tmp-test-config"}, clear=True):
-        # Ensure LOGSEQ_TOKEN is not set
         import os
         os.environ.pop("LOGSEQ_TOKEN", None)
         result = runner.invoke(app, ["graph", "info"])
@@ -62,44 +61,43 @@ def test_missing_required_arg_exits_nonzero(runner):
     assert result.exit_code != 0
 
 
-def test_env_port_non_integer_exits_1_with_friendly_message(runner):
-    with patch.dict("os.environ", {"LOGSEQ_CLI_CONFIG_DIR": "tmp-test-config", "LOGSEQ_TOKEN": "test-token", "LOGSEQ_PORT": "abc"}, clear=True):
+# ---- LOGSEQ_SERVER env var tests ----
+
+def test_env_server_invalid_format_exits_1_with_friendly_message(runner):
+    with patch.dict("os.environ", {"LOGSEQ_CLI_CONFIG_DIR": "tmp-test-config", "LOGSEQ_TOKEN": "test-token", "LOGSEQ_SERVER": "abc"}, clear=True):
         import os
-        os.environ.pop("LOGSEQ_TOKEN", None)
         os.environ["LOGSEQ_TOKEN"] = "test-token"
-        os.environ["LOGSEQ_PORT"] = "abc"
+        os.environ["LOGSEQ_SERVER"] = "abc"
         result = runner.invoke(app, ["graph", "info"])
     assert result.exit_code == 1
-    assert "LOGSEQ_PORT must be a valid integer" in result.stderr
+    assert "expected format" in result.stderr
 
 
-def test_env_port_out_of_range_exits_1_with_friendly_message(runner):
-    with patch.dict("os.environ", {"LOGSEQ_CLI_CONFIG_DIR": "tmp-test-config", "LOGSEQ_TOKEN": "test-token", "LOGSEQ_PORT": "-1"}, clear=True):
+def test_env_server_invalid_port_exits_1_with_friendly_message(runner):
+    with patch.dict("os.environ", {"LOGSEQ_CLI_CONFIG_DIR": "tmp-test-config", "LOGSEQ_TOKEN": "test-token", "LOGSEQ_SERVER": "127.0.0.1:abc"}, clear=True):
         import os
-        os.environ.pop("LOGSEQ_TOKEN", None)
         os.environ["LOGSEQ_TOKEN"] = "test-token"
-        os.environ["LOGSEQ_PORT"] = "-1"
+        os.environ["LOGSEQ_SERVER"] = "127.0.0.1:abc"
         result = runner.invoke(app, ["graph", "info"])
     assert result.exit_code == 1
-    assert "LOGSEQ_PORT must be between 1 and 65535" in result.stderr
+    assert "not a valid integer" in result.stderr
 
 
-def test_env_host_empty_is_rejected_with_friendly_message(runner):
-    """Empty LOGSEQ_HOST env var is rejected with a clear error (not silently falling back)."""
-    with patch.dict("os.environ", {"LOGSEQ_CLI_CONFIG_DIR": "tmp-test-config", "LOGSEQ_TOKEN": "test-token", "LOGSEQ_HOST": ""}, clear=True):
+def test_env_server_port_out_of_range_exits_1_with_friendly_message(runner):
+    with patch.dict("os.environ", {"LOGSEQ_CLI_CONFIG_DIR": "tmp-test-config", "LOGSEQ_TOKEN": "test-token", "LOGSEQ_SERVER": "127.0.0.1:0"}, clear=True):
         import os
         os.environ["LOGSEQ_TOKEN"] = "test-token"
-        os.environ["LOGSEQ_HOST"] = ""
+        os.environ["LOGSEQ_SERVER"] = "127.0.0.1:0"
         result = runner.invoke(app, ["graph", "info"])
     assert result.exit_code == 1
-    assert "LOGSEQ_HOST cannot be empty" in result.stderr
+    assert "port must be between 1 and 65535" in result.stderr
 
 
-def test_env_host_with_spaces_exits_1_with_friendly_message(runner):
-    with patch.dict("os.environ", {"LOGSEQ_CLI_CONFIG_DIR": "tmp-test-config", "LOGSEQ_TOKEN": "test-token", "LOGSEQ_HOST": "my host"}, clear=True):
+def test_env_server_host_with_spaces_exits_1_with_friendly_message(runner):
+    with patch.dict("os.environ", {"LOGSEQ_CLI_CONFIG_DIR": "tmp-test-config", "LOGSEQ_TOKEN": "test-token", "LOGSEQ_SERVER": "my host:12315"}, clear=True):
         import os
         os.environ["LOGSEQ_TOKEN"] = "test-token"
-        os.environ["LOGSEQ_HOST"] = "my host"
+        os.environ["LOGSEQ_SERVER"] = "my host:12315"
         result = runner.invoke(app, ["graph", "info"])
     assert result.exit_code == 1
     assert "must not contain spaces" in result.stderr
@@ -107,11 +105,10 @@ def test_env_host_with_spaces_exits_1_with_friendly_message(runner):
 
 def test_connectivity_check_fails_with_friendly_message(runner):
     """When Logseq is not running, get_service should print a clear connectivity error."""
-    with patch.dict("os.environ", {"LOGSEQ_CLI_CONFIG_DIR": "tmp-test-config", "LOGSEQ_TOKEN": "test-token", "LOGSEQ_HOST": "127.0.0.1", "LOGSEQ_PORT": "1"}, clear=True):
+    with patch.dict("os.environ", {"LOGSEQ_CLI_CONFIG_DIR": "tmp-test-config", "LOGSEQ_TOKEN": "test-token", "LOGSEQ_SERVER": "127.0.0.1:1"}, clear=True):
         import os
         os.environ["LOGSEQ_TOKEN"] = "test-token"
-        os.environ["LOGSEQ_HOST"] = "127.0.0.1"
-        os.environ["LOGSEQ_PORT"] = "1"
+        os.environ["LOGSEQ_SERVER"] = "127.0.0.1:1"
         result = runner.invoke(app, ["graph", "info"])
     assert result.exit_code == 1
     assert "Cannot connect to Logseq" in result.stderr
@@ -119,13 +116,10 @@ def test_connectivity_check_fails_with_friendly_message(runner):
 
 def test_connectivity_error_shows_host_and_port(runner):
     """Connectivity error message should include the configured host and port."""
-    # Use a port that is guaranteed to refuse connection instantly (no timeout)
-    with patch.dict("os.environ", {"LOGSEQ_CLI_CONFIG_DIR": "tmp-test-config", "LOGSEQ_TOKEN": "test-token", "LOGSEQ_HOST": "127.0.0.1", "LOGSEQ_PORT": "1"}, clear=True):
+    with patch.dict("os.environ", {"LOGSEQ_CLI_CONFIG_DIR": "tmp-test-config", "LOGSEQ_TOKEN": "test-token", "LOGSEQ_SERVER": "127.0.0.1:1"}, clear=True):
         import os
         os.environ["LOGSEQ_TOKEN"] = "test-token"
-        os.environ["LOGSEQ_HOST"] = "127.0.0.1"
-        os.environ["LOGSEQ_PORT"] = "1"
+        os.environ["LOGSEQ_SERVER"] = "127.0.0.1:1"
         result = runner.invoke(app, ["graph", "info"])
     assert result.exit_code == 1
-    # Port 1 will refuse, so we get connect error with host:port
     assert "127.0.0.1:1" in result.stderr

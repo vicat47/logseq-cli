@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from src.logseq_client import LogseqClient
 from src.logseq_service import LogseqService
 from src import __version__
-from src.config import get_token, get_host, get_port
+from src.config import get_token, get_server, resolve_server
 from src.cli import auth as auth_module
 from src.cli import page as page_module
 from src.cli import block as block_module
@@ -49,19 +49,6 @@ app.add_typer(skill_module.app, name="skill")
 @app.command("version")
 def version() -> None:
     typer.echo(__version__)
-
-
-def _validate_host_value(host: str) -> None:
-    """Validate host value from env var. Raises typer.Exit on failure."""
-    if not host or not host.strip():
-        typer.echo("Error: LOGSEQ_HOST cannot be empty.", err=True)
-        raise typer.Exit(1)
-    if re.search(r"[\s\x00-\x1f]", host):
-        typer.echo(
-            f"Error: LOGSEQ_HOST must not contain spaces or control characters, got '{host}'.",
-            err=True,
-        )
-        raise typer.Exit(1)
 
 
 def _check_connectivity(host: str, port: int) -> None:
@@ -106,27 +93,12 @@ def get_service(check_connectivity: bool = True) -> LogseqService:
             typer.echo("Environment variable override is still supported:", err=True)
             typer.echo("  LOGSEQ_TOKEN=your-token-here", err=True)
             raise typer.Exit(1)
-    env_host = os.environ.get("LOGSEQ_HOST")
-    if env_host is not None:
-        _validate_host_value(env_host)
-    host = env_host or get_host()
-    port = get_port()
-    port_str = os.environ.get("LOGSEQ_PORT")
-    if port_str:
-        try:
-            port = int(port_str)
-        except ValueError:
-            typer.echo(
-                f"Error: LOGSEQ_PORT must be a valid integer between 1 and 65535, got '{port_str}'.",
-                err=True,
-            )
-            raise typer.Exit(1)
-        if port < 1 or port > 65535:
-            typer.echo(
-                f"Error: LOGSEQ_PORT must be between 1 and 65535, got {port}.",
-                err=True,
-            )
-            raise typer.Exit(1)
+
+    try:
+        host, port = resolve_server()
+    except ValueError as e:
+        typer.echo(f"Error: {e}", err=True)
+        raise typer.Exit(1)
 
     if check_connectivity:
         _check_connectivity(host, port)

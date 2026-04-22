@@ -1,39 +1,22 @@
 from __future__ import annotations
 
-import re
 from typing import Annotated, Optional
 
 import typer
 
-from src.config import get_config_path, get_token, set_token, get_host, set_host, get_port, set_port
+from src.config import get_config_path, get_token, set_token, get_server, set_server
 
 app = typer.Typer(no_args_is_help=True, help="Manage Logseq API connection settings.")
 
-MIN_PORT = 1
-MAX_PORT = 65535
 
-
-def _validate_host(value: str) -> str:
-    """Validate that a host string is non-empty and looks like a valid hostname or IP."""
-    if not value or not value.strip():
-        raise typer.BadParameter("Host cannot be empty.")
-    # Basic check: hostname/IP must not contain spaces or control chars
-    if re.search(r"[\s\x00-\x1f]", value):
-        raise typer.BadParameter(f"Invalid host '{value}': must not contain spaces or control characters.")
-    return value
-
-
-def _validate_port(value: str) -> int:
-    """Validate that a port string is a valid integer within 1-65535."""
+def _validate_server(value: str) -> str:
+    """Validate server string (host:port format)."""
     try:
-        port = int(value)
-    except ValueError:
-        raise typer.BadParameter(f"'{value}' is not a valid integer.")
-    if port < MIN_PORT or port > MAX_PORT:
-        raise typer.BadParameter(
-            f"Port must be between {MIN_PORT} and {MAX_PORT}, got {port}."
-        )
-    return port
+        from src.config import _parse_server
+        _parse_server(value)
+    except ValueError as e:
+        raise typer.BadParameter(str(e))
+    return value
 
 
 def _mask_token(token: str | None) -> str:
@@ -57,27 +40,15 @@ def auth_set_token(
     typer.echo(f"Config path: {path}")
 
 
-@app.command("set-host")
-def auth_set_host(
-    host: Annotated[
+@app.command("set-server")
+def auth_set_server(
+    server: Annotated[
         str,
-        typer.Argument(help="Logseq HTTP server host (default: 127.0.0.1).", callback=_validate_host),
+        typer.Argument(help="Logseq HTTP server address in 'host:port' format (default: 127.0.0.1:12315).", callback=_validate_server),
     ],
 ) -> None:
-    path = set_host(host)
-    typer.echo(f"Stored Logseq host: {host}")
-    typer.echo(f"Config path: {path}")
-
-
-@app.command("set-port")
-def auth_set_port(
-    port: Annotated[
-        int,
-        typer.Argument(help="Logseq HTTP server port (default: 12315).", callback=_validate_port),
-    ],
-) -> None:
-    path = set_port(port)
-    typer.echo(f"Stored Logseq port: {port}")
+    path = set_server(server)
+    typer.echo(f"Stored Logseq server: {server}")
     typer.echo(f"Config path: {path}")
 
 
@@ -86,7 +57,6 @@ def auth_status() -> None:
     token = get_token()
     typer.echo(f"Config path: {get_config_path()}")
     typer.echo(f"Stored token: {_mask_token(token)}")
-    typer.echo(f"Host: {get_host()}")
-    typer.echo(f"Port: {get_port()}")
+    typer.echo(f"Server: {get_server()}")
     if not token:
         typer.echo("Run `logseq auth set-token` to store a token.")
