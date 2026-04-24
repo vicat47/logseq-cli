@@ -3,90 +3,75 @@ from __future__ import annotations
 import json
 import os
 import platform
-import re
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
-DEFAULT_SERVER = "http://127.0.0.1:12315"
-
-
-def _parse_server(server: str) -> tuple[str, int]:
-    """Parse a server URL string into (host, port).
-
-    Supported formats:
-      - "http://10.191.64.81:12315"  → host="10.191.64.81", port=12315
-      - "https://example.com"        → host="example.com", port=443
-      - "http://example.com"         → host="example.com", port=80
-      - "http://example.com:8080"    → host="example.com", port=8080
-      - "127.0.0.1:12315"            → host="127.0.0.1", port=12315 (legacy shorthand)
-      - "127.0.0.1"                  → host="127.0.0.1", port=12315 (bare host → default)
-      - "" / empty                    → returns DEFAULT_SERVER parsed
-
-    Port defaults:
-      - http → 80
-      - https → 443
-      - no scheme (legacy shorthand) → 12315
-    """
-    if not server or not server.strip():
-        return _parse_server(DEFAULT_SERVER)
-
-    server = server.strip()
-
-    # If no scheme, treat as legacy shorthand "host:port" or "host"
-    if not server.startswith(("http://", "https://")):
-        if ":" in server:
-            last_colon = server.rfind(":")
-            host = server[:last_colon].strip()
-            port_str = server[last_colon + 1:].strip()
-            if not host:
-                raise ValueError(f"Invalid server '{server}': host cannot be empty")
-            if re.search(r"[\s\x00-\x1f]", host):
-                raise ValueError(f"Invalid host '{host}': must not contain spaces or control characters")
-            if port_str:
-                try:
-                    port = int(port_str)
-                except ValueError:
-                    raise ValueError(f"Invalid server '{server}': port '{port_str}' is not a valid integer")
-                if port < 1 or port > 65535:
-                    raise ValueError(f"Invalid server '{server}': port must be between 1 and 65535, got {port}")
-            else:
-                port = 12315
-        else:
-            # Bare hostname with no scheme → use default
-            host = server
-            port = 12315
-
-        if re.search(r"[\s\x00-\x1f]", host):
-            raise ValueError(f"Invalid host '{host}': must not contain spaces or control characters")
-        return host, port
-
-    # Has scheme: parse as URL
-    parsed = urlparse(server)
-    scheme = parsed.scheme
-    host = parsed.hostname
-
-    if not host:
-        raise ValueError(f"Invalid server '{server}': could not determine host")
-    if re.search(r"[\s\x00-\x1f]", host):
-        raise ValueError(f"Invalid host '{host}': must not contain spaces or control characters")
-
-    if parsed.port:
-        port = parsed.port
-        if port < 1 or port > 65535:
-            raise ValueError(f"Invalid server '{server}': port must be between 1 and 65535, got {port}")
-    else:
-        # Default port by scheme
-        port = 443 if scheme == "https" else 80
-
-    return host, port
+LEGACY_DEFAULT_PORT = 12315
+SCHEME_PORT_DEFAULTS = {"http": 80, "https": 443}
 
 
 def _validate_server(server: str) -> None:
-    """Validate server string at the config layer. Raises ValueError on invalid input."""
+    """Validate server string. Raises ValueError on invalid input."""
     if not server or not server.strip():
         raise ValueError("Server address cannot be empty.")
-    _parse_server(server)  # Will raise ValueError if invalid
+
+    server = server.strip()
+    has_scheme = server.startswith(("http://", "https://"))
+
+    if not has_scheme:
+        # Check if it has some other scheme (e.g., mqtt://, ftp://)
+        if "://" in server:
+            scheme = server.split("://")[0]
+            raise ValueError(f"Invalid server '{server}': scheme must be http or https, got '{scheme}'")
+        server = f"http://{server}"
+
+    parsed = urlparse(server)
+
+    if not parsed.hostname:
+        raise ValueError(f"Invalid server '{server}': could not determine host")
+    if " " in parsed.hostname:
+        raise ValueError(f"Invalid host '{parsed.hostname}': must not contain spaces")
+
+    try:
+        port = parsed.port
+    except ValueError as e:
+        if "out of range" in str(e):
+            raise ValueError(f"Invalid server '{server}': port must be between 1 and 65535")
+        raise ValueError(f"Invalid server '{server}': port is not a valid integer")
+
+    if port is not None and (port < 1 or port > 65535):
+        raise ValueError(f"Invalid server '{server}': port must be between 1 and 65535, got {port}")
+
+
+def _normalize_server_url(server: str) -> str:
+    """Validate and normalize server string to a full URL."""
+    _validate_server(server)
+
+    server = server.strip()
+    is_bare = not server.startswith(("http://", "https://"))
+    if is_bare:
+        server = f"http://{server}"
+
+    parsed = urlparse(server)
+
+    # Determine port
+    explicit_port = parsed.port
+    if explicit_port is not None:
+        port = explicit_port
+    elif is_bare:
+        port = LEGACY_DEFAULT_PORT
+    else:
+        port = SCHEME_PORT_DEFAULTS.get(parsed.scheme, 80)
+
+    # Build netloc: omit port only if it matches the scheme's standard default
+    scheme_default = SCHEME_PORT_DEFAULTS.get(parsed.scheme)
+    if not is_bare and port == scheme_default:
+        netloc = parsed.hostname
+    else:
+        netloc = f"{parsed.hostname}:{port}"
+
+    return urlunparse(parsed._replace(netloc=netloc))
 
 
 def get_config_dir() -> Path:
@@ -151,39 +136,40 @@ def set_server(server: str) -> Path:
     _validate_server(server)
     config = load_config()
     config["server"] = server
-    # Clean up legacy host/port keys
-    config.pop("host", None)
-    config.pop("port", None)
     return save_config(config)
 
 
-def get_server() -> str:
+def get_server() -> str | None:
+    """Get server from config. Returns None if not configured."""
     config = load_config()
-
-    # Prefer new 'server' key
     server = config.get("server")
     if isinstance(server, str) and server:
         return server
-
-    # Backward compatibility: reconstruct from legacy host + port
-    host = config.get("host")
-    port = config.get("port")
-    if isinstance(host, str) and host and isinstance(port, int) and 1 <= port <= 65535:
-        return f"http://{host}:{port}"
-
-    return DEFAULT_SERVER
+    return None
 
 
-def resolve_server() -> tuple[str, int]:
-    """Resolve the current server into (host, port) tuple, applying env var override."""
+def resolve_server(default: str) -> str:
+    """Resolve the current server to a full URL string, applying env var override.
+
+    Args:
+        default: Default server URL to use when no config or env var is set.
+
+    Returns:
+        Normalized full URL string.
+
+    Raises:
+        ValueError: If the server string is invalid.
+    """
     env_server = os.environ.get("LOGSEQ_SERVER")
     server_str = env_server if env_server else get_server()
 
-    # Validate env var server
-    if env_server:
-        try:
-            return _parse_server(env_server)
-        except ValueError as e:
-            raise ValueError(f"Invalid LOGSEQ_SERVER '{env_server}': {e}")
+    if not server_str:
+        server_str = default
 
-    return _parse_server(server_str)
+    server_str = server_str.strip()
+
+    try:
+        return _normalize_server_url(server_str)
+    except ValueError as e:
+        source = "LOGSEQ_SERVER" if env_server else "config"
+        raise ValueError(f"Invalid server from {source} '{server_str}': {e}")

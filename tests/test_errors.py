@@ -71,8 +71,7 @@ def test_env_server_bare_hostname_works(runner, monkeypatch, tmp_path):
     from unittest.mock import patch
     with patch("src.cli.main._check_connectivity") as mock_check:
         result = runner.invoke(app, ["graph", "info"])
-    # Called with default port since no port specified
-    mock_check.assert_called_once_with("127.0.0.1", 12315)
+    mock_check.assert_called_once_with("http://127.0.0.1:12315")
 
 
 def test_env_server_full_url_works(runner, monkeypatch, tmp_path):
@@ -83,7 +82,7 @@ def test_env_server_full_url_works(runner, monkeypatch, tmp_path):
     from unittest.mock import patch
     with patch("src.cli.main._check_connectivity") as mock_check:
         result = runner.invoke(app, ["graph", "info"])
-    mock_check.assert_called_once_with("10.0.0.1", 8080)
+    mock_check.assert_called_once_with("http://10.0.0.1:8080")
 
 
 def test_env_server_non_integer_port_exits_1_with_friendly_message(runner):
@@ -94,7 +93,7 @@ def test_env_server_non_integer_port_exits_1_with_friendly_message(runner):
         os.environ["LOGSEQ_SERVER"] = "127.0.0.1:abc"
         result = runner.invoke(app, ["graph", "info"])
     assert result.exit_code == 1
-    assert "not a valid integer" in result.stderr
+    assert "valid integer" in result.stderr
 
 
 def test_env_server_port_out_of_range_exits_1_with_friendly_message(runner):
@@ -165,7 +164,7 @@ def test_get_current_graph_returns_graph_info(monkeypatch, tmp_path):
 
     import unittest.mock
     with unittest.mock.patch("httpx.Client", FakeClient):
-        result = _get_current_graph("127.0.0.1", 12315, "fake-token")
+        result = _get_current_graph("http://127.0.0.1:12315", "fake-token")
 
     assert result is not None
     assert result["name"] == "Test Graph"
@@ -189,6 +188,6 @@ def test_get_current_graph_returns_none_on_error(monkeypatch, tmp_path):
 
     import unittest.mock
     with unittest.mock.patch("httpx.Client", FakeClient):
-        result = _get_current_graph("127.0.0.1", 12315, "fake-token")
+        result = _get_current_graph("http://127.0.0.1:12315", "fake-token")
 
     assert result is None

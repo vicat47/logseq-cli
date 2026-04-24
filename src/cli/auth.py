@@ -1,13 +1,15 @@
 from __future__ import annotations
 
-import httpx
 from typing import Annotated, Optional
 
+import httpx
 import typer
 
-from src.config import get_config_path, get_token, set_token, get_server, set_server, _parse_server
+from src.config import get_config_path, get_token, set_token, get_server, set_server, _validate_server as _validate_server_url, _normalize_server_url
 
 app = typer.Typer(no_args_is_help=True, help="Manage Logseq API connection settings.")
+
+DEFAULT_SERVER = "http://127.0.0.1:12315"
 
 
 def _validate_server(value: str) -> str:
@@ -16,7 +18,7 @@ def _validate_server(value: str) -> str:
     if not value:
         raise typer.BadParameter("Server address cannot be empty.")
     try:
-        _parse_server(value)
+        _validate_server_url(value)
     except ValueError as e:
         raise typer.BadParameter(str(e))
     return value
@@ -30,20 +32,20 @@ def _mask_token(token: str | None) -> str:
     return "*" * (len(token) - 4) + token[-4:]
 
 
-def _check_connectivity(host: str, port: int) -> bool:
-    """Return True if Logseq HTTP server responds on the given host:port."""
+def _check_connectivity(url: str) -> bool:
+    """Check connectivity to Logseq server. Returns True if reachable."""
     try:
-        with httpx.Client(base_url=f"http://{host}:{port}", timeout=3) as client:
-            resp = client.get("/api")
-            return resp.status_code in (200, 400, 401, 403, 405)
-    except httpx.RequestError:
+        with httpx.Client(base_url=url, timeout=3) as client:
+            response = client.get("/api")
+            return response.status_code in (200, 400, 401, 403, 405)
+    except (httpx.ConnectError, httpx.ReadTimeout):
         return False
 
 
-def _get_current_graph(host: str, port: int, token: str) -> dict | None:
+def _get_current_graph(base_url: str, token: str) -> dict | None:
     """Call logseq.App.getCurrentGraph and return graph info or None on failure."""
     try:
-        with httpx.Client(base_url=f"http://{host}:{port}", timeout=5) as client:
+        with httpx.Client(base_url=base_url, timeout=5) as client:
             resp = client.post(
                 "/api",
                 headers={
@@ -81,13 +83,14 @@ def auth_set_server(
         typer.Argument(help="Logseq HTTP server URL (default: http://127.0.0.1:12315). Examples: http://10.0.0.1:12315, https://example.com", callback=_validate_server),
     ],
 ) -> None:
-    host, port = _parse_server(server)
+    # Normalize to full URL
+    base_url = _normalize_server_url(server)
 
     # Pre-save connectivity check
-    connected = _check_connectivity(host, port)
+    connected = _check_connectivity(base_url)
     if not connected:
         typer.echo(
-            f"Warning: Cannot connect to Logseq at {host}:{port}. "
+            f"Warning: Cannot connect to Logseq at {base_url}. "
             f"Is Logseq running and reachable?",
             err=True,
         )
@@ -107,7 +110,7 @@ def auth_set_server(
 
     # Get current graph info
     token = get_token()
-    graph = _get_current_graph(host, port, token) if token else None
+    graph = _get_current_graph(base_url, token) if token else None
 
     if graph:
         typer.echo("")
@@ -124,8 +127,9 @@ def auth_set_server(
 @app.command("status")
 def auth_status() -> None:
     token = get_token()
+    server = get_server() or DEFAULT_SERVER
     typer.echo(f"Config path: {get_config_path()}")
     typer.echo(f"Stored token: {_mask_token(token)}")
-    typer.echo(f"Server: {get_server()}")
+    typer.echo(f"Server: {server}")
     if not token:
         typer.echo("Run `logseq auth set-token` to store a token.")

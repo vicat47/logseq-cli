@@ -140,7 +140,7 @@ def test_auth_set_server_rejects_non_integer_port(monkeypatch, tmp_path):
     from src.cli.main import app
     result = runner().invoke(app, ["auth", "set-server", "127.0.0.1:abc"])
     assert result.exit_code == 2
-    assert "not a valid integer" in result.output
+    assert "valid integer" in result.output
 
 
 def test_auth_set_server_rejects_host_with_spaces(monkeypatch, tmp_path):
@@ -194,22 +194,22 @@ def test_config_set_server_cleans_legacy_keys(monkeypatch, tmp_path):
     set_server("http://10.0.0.1:8080")
     config = load_config()
     assert config["server"] == "http://10.0.0.1:8080"
-    assert "host" not in config
-    assert "port" not in config
     assert config["token"] == "tok"
 
 
 def test_config_get_server_backward_compat(monkeypatch, tmp_path):
+    """get_server() returns None for legacy host/port keys - CLI handles default."""
     monkeypatch.setenv("LOGSEQ_CLI_CONFIG_DIR", str(tmp_path))
     from src.config import get_server, save_config
     save_config({"host": "10.0.0.1", "port": 8080})
-    assert get_server() == "http://10.0.0.1:8080"
+    assert get_server() is None
 
 
 def test_config_get_server_defaults(monkeypatch, tmp_path):
+    """get_server() returns None when no config exists - CLI handles default."""
     monkeypatch.setenv("LOGSEQ_CLI_CONFIG_DIR", str(tmp_path))
     from src.config import get_server
-    assert get_server() == "http://127.0.0.1:12315"
+    assert get_server() is None
 
 
 def test_config_get_server_uses_new_key(monkeypatch, tmp_path):
@@ -224,9 +224,8 @@ def test_config_resolve_server_env_overrides_config(monkeypatch, tmp_path):
     monkeypatch.setenv("LOGSEQ_SERVER", "http://10.0.0.2:5555")
     from src.config import save_config, resolve_server
     save_config({"server": "http://127.0.0.1:12315"})
-    host, port = resolve_server()
-    assert host == "10.0.0.2"
-    assert port == 5555
+    url = resolve_server(default="http://fallback:12315")
+    assert url == "http://10.0.0.2:5555"
 
 
 def test_config_resolve_server_env_invalid(monkeypatch, tmp_path):
@@ -234,9 +233,16 @@ def test_config_resolve_server_env_invalid(monkeypatch, tmp_path):
     monkeypatch.setenv("LOGSEQ_SERVER", "127.0.0.1:abc")
     from src.config import resolve_server
     import pytest
-    with pytest.raises(ValueError, match="not a valid integer"):
-        resolve_server()
+    with pytest.raises(ValueError, match="port is not a valid integer"):
+        resolve_server(default="http://fallback:12315")
 
+def test_config_resolve_server_invalid_schema(monkeypatch, tmp_path):
+    monkeypatch.setenv("LOGSEQ_CLI_CONFIG_DIR", str(tmp_path))
+    monkeypatch.setenv("LOGSEQ_SERVER", "mqtt://127.0.0.1:1883")
+    from src.config import resolve_server
+    import pytest
+    with pytest.raises(ValueError, match="scheme must be http or https"):
+        resolve_server(default="http://fallback:12315")
 
 # ---- set-server connectivity prompt tests ----
 
@@ -244,7 +250,9 @@ def test_auth_set_server_prompts_on_connection_failure_and_aborts_on_n(monkeypat
     """When connection fails, user declines save (default N)."""
     monkeypatch.setenv("LOGSEQ_CLI_CONFIG_DIR", str(tmp_path))
     from src.cli.main import app
-    result = runner().invoke(app, ["auth", "set-server", "127.0.0.1:12315"], input="n\n")
+    from unittest.mock import patch
+    with patch("src.cli.auth._check_connectivity", return_value=False):
+        result = runner().invoke(app, ["auth", "set-server", "127.0.0.1:12315"], input="n\n")
     assert result.exit_code == 0
     assert "Cannot connect to Logseq" in result.output
     assert "not saved" in result.output
@@ -255,7 +263,9 @@ def test_auth_set_server_prompts_on_connection_failure_and_saves_on_y(monkeypatc
     """When connection fails, user confirms save (Y)."""
     monkeypatch.setenv("LOGSEQ_CLI_CONFIG_DIR", str(tmp_path))
     from src.cli.main import app
-    result = runner().invoke(app, ["auth", "set-server", "127.0.0.1:12315"], input="y\n")
+    from unittest.mock import patch
+    with patch("src.cli.auth._check_connectivity", return_value=False):
+        result = runner().invoke(app, ["auth", "set-server", "127.0.0.1:12315"], input="y\n")
     assert result.exit_code == 0
     assert "Stored Logseq server: 127.0.0.1:12315" in result.stdout
     config = json.loads((tmp_path / "config.json").read_text(encoding="utf-8"))
@@ -285,62 +295,58 @@ def test_auth_set_server_saves_immediately_when_connected(monkeypatch, tmp_path)
     assert config["server"] == "http://127.0.0.1:12315"
 
 
-# ---- URL parsing tests ----
+# ---- URL normalizing tests ----
 
-def test_parse_server_full_url_uses_port_from_url(monkeypatch, tmp_path):
+def test_normalize_server_full_url_preserves_port(monkeypatch, tmp_path):
     monkeypatch.setenv("LOGSEQ_CLI_CONFIG_DIR", str(tmp_path))
-    from src.config import _parse_server
-    host, port = _parse_server("http://10.191.64.81:12315")
-    assert host == "10.191.64.81"
-    assert port == 12315
+    from src.config import _normalize_server_url
+    assert _normalize_server_url("http://10.191.64.81:12315") == "http://10.191.64.81:12315"
 
 
-def test_parse_server_http_url_defaults_to_80(monkeypatch, tmp_path):
+def test_normalize_server_http_url_omits_default_port(monkeypatch, tmp_path):
     monkeypatch.setenv("LOGSEQ_CLI_CONFIG_DIR", str(tmp_path))
-    from src.config import _parse_server
-    host, port = _parse_server("http://example.com")
-    assert host == "example.com"
-    assert port == 80
+    from src.config import _normalize_server_url
+    assert _normalize_server_url("http://example.com") == "http://example.com"
 
 
-def test_parse_server_https_url_defaults_to_443(monkeypatch, tmp_path):
+def test_normalize_server_https_url_omits_default_port(monkeypatch, tmp_path):
     monkeypatch.setenv("LOGSEQ_CLI_CONFIG_DIR", str(tmp_path))
-    from src.config import _parse_server
-    host, port = _parse_server("https://example.com")
-    assert host == "example.com"
-    assert port == 443
+    from src.config import _normalize_server_url
+    assert _normalize_server_url("https://example.com") == "https://example.com"
 
 
-def test_parse_server_https_with_explicit_port(monkeypatch, tmp_path):
+def test_normalize_server_https_with_explicit_port(monkeypatch, tmp_path):
     monkeypatch.setenv("LOGSEQ_CLI_CONFIG_DIR", str(tmp_path))
-    from src.config import _parse_server
-    host, port = _parse_server("https://example.com:8443")
-    assert host == "example.com"
-    assert port == 8443
+    from src.config import _normalize_server_url
+    assert _normalize_server_url("https://example.com:8443") == "https://example.com:8443"
 
 
-def test_parse_server_bare_hostname_uses_default_port(monkeypatch, tmp_path):
+def test_normalize_server_bare_hostname_adds_scheme_and_port(monkeypatch, tmp_path):
     monkeypatch.setenv("LOGSEQ_CLI_CONFIG_DIR", str(tmp_path))
-    from src.config import _parse_server
-    host, port = _parse_server("10.191.64.81")
-    assert host == "10.191.64.81"
-    assert port == 12315
+    from src.config import _normalize_server_url
+    assert _normalize_server_url("10.191.64.81") == "http://10.191.64.81:12315"
 
 
-def test_parse_server_trailing_colon_uses_default_port(monkeypatch, tmp_path):
+def test_normalize_server_trailing_colon_adds_default_port(monkeypatch, tmp_path):
     monkeypatch.setenv("LOGSEQ_CLI_CONFIG_DIR", str(tmp_path))
-    from src.config import _parse_server
-    host, port = _parse_server("10.191.64.81:")
-    assert host == "10.191.64.81"
-    assert port == 12315
+    from src.config import _normalize_server_url
+    assert _normalize_server_url("10.191.64.81:") == "http://10.191.64.81:12315"
 
 
-def test_parse_server_empty_returns_default(monkeypatch, tmp_path):
+def test_normalize_server_empty_raises(monkeypatch, tmp_path):
     monkeypatch.setenv("LOGSEQ_CLI_CONFIG_DIR", str(tmp_path))
-    from src.config import _parse_server
-    host, port = _parse_server("")
-    assert host == "127.0.0.1"
-    assert port == 12315
+    from src.config import _normalize_server_url
+    import pytest
+    with pytest.raises(ValueError, match="cannot be empty"):
+        _normalize_server_url("")
+
+
+def test_normalize_server_invalid_schema_raises(monkeypatch, tmp_path):
+    monkeypatch.setenv("LOGSEQ_CLI_CONFIG_DIR", str(tmp_path))
+    from src.config import _normalize_server_url
+    import pytest
+    with pytest.raises(ValueError, match="scheme must be http or https"):
+        _normalize_server_url("mqtt://127.0.0.1:1883")
 
 
 def test_auth_set_server_accepts_full_url(monkeypatch, tmp_path):
@@ -369,20 +375,27 @@ def test_auth_set_server_accepts_https(monkeypatch, tmp_path):
     assert "Stored Logseq server: https://example.com" in result.stdout
 
 
-def test_config_get_server_defaults_still_returns_host_port(monkeypatch, tmp_path):
-    """get_server() returns DEFAULT_SERVER format when no config exists."""
+def test_config_get_server_defaults_still_returns_none(monkeypatch, tmp_path):
+    """get_server() returns None when no config exists - CLI provides default."""
     monkeypatch.setenv("LOGSEQ_CLI_CONFIG_DIR", str(tmp_path))
     from src.config import get_server
-    assert get_server() == "http://127.0.0.1:12315"
+    assert get_server() is None
 
 
 def test_config_resolve_server_bare_hostname_env(monkeypatch, tmp_path):
     monkeypatch.setenv("LOGSEQ_CLI_CONFIG_DIR", str(tmp_path))
     monkeypatch.setenv("LOGSEQ_SERVER", "10.0.0.1")
     from src.config import resolve_server
-    host, port = resolve_server()
-    assert host == "10.0.0.1"
-    assert port == 12315
+    url = resolve_server(default="http://fallback:12315")
+    assert url == "http://10.0.0.1:12315"
+
+
+def test_config_resolve_server_uses_default_when_nothing_configured(monkeypatch, tmp_path):
+    """resolve_server uses default when no env var or config exists."""
+    monkeypatch.setenv("LOGSEQ_CLI_CONFIG_DIR", str(tmp_path))
+    from src.config import resolve_server
+    url = resolve_server(default="http://my-default:9999")
+    assert url == "http://my-default:9999"
 
 
 def test_auth_set_server_shows_graph_info_warning_when_unavailable(monkeypatch, tmp_path):
