@@ -49,35 +49,6 @@ def version() -> None:
     typer.echo(__version__)
 
 
-def _check_connectivity(url: str) -> bool:
-    """Pre-flight connectivity check. Returns True if reachable, False otherwise."""
-    try:
-        with httpx.Client(timeout=3) as sync_client:
-            response = sync_client.get(url)
-            if response.status_code not in (200, 400, 401, 403, 405):
-                typer.echo(
-                    f"Error: Logseq responded with unexpected status {response.status_code} "
-                    f"at {url}. Is Logseq running with the HTTP plugin enabled?",
-                    err=True,
-                )
-                return False
-            return True
-    except httpx.ConnectError:
-        typer.echo(
-            f"Error: Cannot connect to Logseq at {url}. "
-            f"Is Logseq running and reachable?",
-            err=True,
-        )
-        return False
-    except httpx.ReadTimeout:
-        typer.echo(
-            f"Error: Connection to Logseq at {url} timed out. "
-            f"Is Logseq running and responsive?",
-            err=True,
-        )
-        return False
-
-
 def get_service(check_connectivity: bool = True) -> LogseqService:
     token = os.environ.get("LOGSEQ_TOKEN")
     if not token:
@@ -99,7 +70,7 @@ def get_service(check_connectivity: bool = True) -> LogseqService:
         raise typer.Exit(1)
 
     if check_connectivity:
-        if not _check_connectivity(base_url):
+        if not LogseqClient.check_connectivity(base_url, verbose=True):
             raise typer.Exit(1)
 
     return LogseqService(LogseqClient(token=token, base_url=base_url))

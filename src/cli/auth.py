@@ -7,6 +7,7 @@ import typer
 
 from src.config import get_config_path, get_token, set_token, load_config_file_server, set_server, resolve_token, \
     _validate_server as _validate_server_url, _normalize_server_url, DEFAULT_SERVER
+from src.logseq_client import LogseqClient
 
 app = typer.Typer(no_args_is_help=True, help="Manage Logseq API connection settings.")
 
@@ -37,16 +38,6 @@ def _mask_token(token: str | None) -> str:
     if len(token) <= 4:
         return "*" * len(token)
     return "*" * (len(token) - 4) + token[-4:]
-
-
-def _check_connectivity(url: str) -> bool:
-    """Check connectivity to Logseq server. Returns True if reachable."""
-    try:
-        with httpx.Client(timeout=3) as client:
-            response = client.get(url)
-            return response.status_code in (200, 400, 401, 403, 405)
-    except (httpx.ConnectError, httpx.ReadTimeout):
-        return False
 
 
 def _get_current_graph(base_url: str, token: str) -> dict:
@@ -100,7 +91,7 @@ def auth_set_server(
     base_url = _normalize_server_url(server)
 
     # Pre-save connectivity check
-    connected = _check_connectivity(base_url)
+    connected = LogseqClient.check_connectivity(base_url)
     if not connected:
         typer.echo(
             f"Warning: Cannot connect to Logseq at {base_url}. "

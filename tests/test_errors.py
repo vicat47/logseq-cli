@@ -69,9 +69,9 @@ def test_env_server_bare_hostname_works(runner, monkeypatch, tmp_path):
     monkeypatch.setenv("LOGSEQ_TOKEN", "test-token")
     monkeypatch.setenv("LOGSEQ_SERVER", "127.0.0.1")
     from unittest.mock import patch
-    with patch("src.cli.main._check_connectivity") as mock_check:
+    with patch("src.logseq_client.LogseqClient.check_connectivity") as mock_check:
         result = runner.invoke(app, ["graph", "info"])
-    mock_check.assert_called_once_with("http://127.0.0.1:12315/api")
+    mock_check.assert_called_once_with("http://127.0.0.1:12315/api", verbose=True)
 
 
 def test_env_server_full_url_works(runner, monkeypatch, tmp_path):
@@ -80,9 +80,9 @@ def test_env_server_full_url_works(runner, monkeypatch, tmp_path):
     monkeypatch.setenv("LOGSEQ_TOKEN", "test-token")
     monkeypatch.setenv("LOGSEQ_SERVER", "http://10.0.0.1:8080")
     from unittest.mock import patch
-    with patch("src.cli.main._check_connectivity") as mock_check:
+    with patch("src.logseq_client.LogseqClient.check_connectivity") as mock_check:
         result = runner.invoke(app, ["graph", "info"])
-    mock_check.assert_called_once_with("http://10.0.0.1:8080/api")
+    mock_check.assert_called_once_with("http://10.0.0.1:8080/api", verbose=True)
 
 
 def test_env_server_non_integer_port_exits_1_with_friendly_message(runner):
